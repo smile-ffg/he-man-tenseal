@@ -7,8 +7,8 @@ import tenseal as ts
 from loguru import logger
 from pydantic import BaseSettings
 
-from tenseal_inference import config, crypto
-from tenseal_inference.inference import ONNXModel
+from he_man_tenseal import config, crypto
+from he_man_tenseal.inference import ONNXModel
 
 
 def config_args(cfg_class: BaseSettings) -> Callable:

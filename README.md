@@ -1,4 +1,4 @@
-# tenseal-inference
+# he-man-tenseal
 ![Architecture](img/architecture.PNG)
 
 ## setup
@@ -8,14 +8,14 @@
 ## usage
 run this command for an interactive help
 ```
-tenseal-inference --help
+he-man-tenseal --help
 ```
 
 note:
 all parameters defined in `config.py` can also be set by setting enviorment variables
 
 ### MNIST demo
-This is a step-by-step manual to demonstrate the interface of `tenseal-inference` by classifying MNIST images.<br/>
+This is a step-by-step manual to demonstrate the interface of `he-man-tenseal` by classifying MNIST images.<br/>
 Input sample: `demo/mnist/input.npy`<br/>
 ![MNIST-sample-input](img/mnist_input.png)
 
@@ -26,31 +26,31 @@ Train an MNIST classifier by executing `scripts/train_mnist_model.py`. The resul
 **Step 1: Keyparams Generation**<br/>
 The model owner calls `keyparams` together with the model (`-m`) and a calibration-data container (zip/npz) (`-c`). The calibration-data is a set of sample inputs that is used to derive meta-data for the subsequent key generation. The keyparams are saved at the defined location (`-o`). Moreover, a calibrated model is generated and saved with the suffix `_calibrated` in the filename (i.e. `mnist.onnx` => `mnist_calibrated.onnx`). The calibrated model should be used for inference.
 ```
-tenseal-inference keyparams -m demo/mnist/mnist.onnx -c demo/mnist/calibration-data.zip -o demo/mnist/keyparams.json
+he-man-tenseal keyparams -m demo/mnist/mnist.onnx -c demo/mnist/calibration-data.zip -o demo/mnist/keyparams.json
 ```
 
 **Step 2: Key Generation**<br/>
 The client generates the keys using the previously computed keyparams (`-i`). The resulting secret key is saved at the defined location (`-o`) together with the evaluation key whose filename is appended by `.pub`.
 ```
-tenseal-inference keygen -i demo/mnist/keyparams.json -o demo/mnist/key
+he-man-tenseal keygen -i demo/mnist/keyparams.json -o demo/mnist/key
 ```
 
 **Step 3: Encryption**<br/>
 The client encrypts input data using the key (`-k`) and the cleartext input (`-i`). The encrypted input is saved at the defined location (`-o`).
 ```
-tenseal-inference encrypt -k demo/mnist/key -i demo/mnist/input.npy -o demo/mnist/input.enc
+he-man-tenseal encrypt -k demo/mnist/key -i demo/mnist/input.npy -o demo/mnist/input.enc
 ```
 
 **Step 4: Inference**<br/>
 The model owner performs inference using the calibrated model (`-m`), the public evaluation key (`-k`) and the encrypted input (`-i`). The encrypted result is saved at the defined location (`-o`).
 ```
-tenseal-inference inference -m demo/mnist/mnist_calibrated.onnx -k demo/mnist/key.pub -i demo/mnist/input.enc -o demo/mnist/output.enc
+he-man-tenseal inference -m demo/mnist/mnist_calibrated.onnx -k demo/mnist/key.pub -i demo/mnist/input.enc -o demo/mnist/output.enc
 ```
 
 **Step 5: Decryption**<br/>
 The client decrypts the encrypted result (`-i`) using the secret key (`-k`). The cleartext result is saved at the defined location (`-o`).
 ```
-tenseal-inference decrypt -k demo/mnist/key -i demo/mnist/output.enc -o demo/mnist/output.npy
+he-man-tenseal decrypt -k demo/mnist/key -i demo/mnist/output.enc -o demo/mnist/output.npy
 ```
 
 **Result:**<br/>

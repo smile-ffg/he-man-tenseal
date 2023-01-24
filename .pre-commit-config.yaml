@@ -48,7 +48,7 @@ repos:
     hooks:
     -   id: pytest
         name: pytest
-        entry: pytest --cov=tenseal_inference --cov-report html
+        entry: pytest --cov=he_man_tenseal --cov-report html
         language: system
         pass_filenames: false
         always_run: true

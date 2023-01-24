@@ -7,7 +7,7 @@ from typing import List, Tuple
 import tenseal as ts
 from loguru import logger
 
-from tenseal_inference.inference import ONNXModel
+from he_man_tenseal.inference import ONNXModel
 
 from .config import KeyParamsConfig
 

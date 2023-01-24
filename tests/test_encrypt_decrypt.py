@@ -3,13 +3,13 @@ from pathlib import Path
 
 import numpy as np
 
-from tenseal_inference.config import (
+from he_man_tenseal.config import (
     DecryptConfig,
     EncryptConfig,
     KeyGenConfig,
     KeyParamsConfig,
 )
-from tenseal_inference.main import run_decrypt, run_encrypt, run_keygen, run_keyparams
+from he_man_tenseal.main import run_decrypt, run_encrypt, run_keygen, run_keyparams
 
 
 def test_encrypt_decrypt(tmp_path):

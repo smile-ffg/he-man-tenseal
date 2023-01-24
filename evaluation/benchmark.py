@@ -24,7 +24,7 @@ def benchmark_accuracy_and_latency(
         t0 = time()
         run(
             [
-                "tenseal-inference",
+                "he-man-tenseal",
                 "inference",
                 "-m",
                 model_path,
@@ -42,7 +42,7 @@ def benchmark_accuracy_and_latency(
     for j in tqdm(range(start_index, start_index + n_samples), "Decryption"):
         run(
             [
-                "tenseal-inference",
+                "he-man-tenseal",
                 "decrypt",
                 "-k",
                 f"{container_name}/key",
@@ -97,7 +97,7 @@ def prepare_calibrate(
 
     run(
         [
-            "tenseal-inference",
+            "he-man-tenseal",
             "keyparams",
             "-m",
             model,
@@ -114,7 +114,7 @@ def prepare_generate_keys(container_name: str) -> None:
     print("Generate keys ...", end=" ")
     run(
         [
-            "tenseal-inference",
+            "he-man-tenseal",
             "keygen",
             "-i",
             f"{container_name}/keyparams.json",
@@ -131,7 +131,7 @@ def prepare_encrypt(
     for j in tqdm(range(start_index, start_index + n_samples), "Encrypt"):
         run(
             [
-                "tenseal-inference",
+                "he-man-tenseal",
                 "encrypt",
                 "-k",
                 f"{container_name}/key",

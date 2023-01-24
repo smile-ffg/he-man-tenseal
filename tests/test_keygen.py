@@ -1,9 +1,9 @@
 import json
 import os
 
-from tenseal_inference.config import KeyGenConfig
-from tenseal_inference.crypto import load_context
-from tenseal_inference.main import run_keygen
+from he_man_tenseal.config import KeyGenConfig
+from he_man_tenseal.crypto import load_context
+from he_man_tenseal.main import run_keygen
 
 
 def test_keygen(tmp_path):

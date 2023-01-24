@@ -6,9 +6,9 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-import tenseal_inference.crypto as crypto
-from tenseal_inference.config import KeyParamsConfig
-from tenseal_inference.inference import ONNXModel
+import he_man_tenseal.crypto as crypto
+from he_man_tenseal.config import KeyParamsConfig
+from he_man_tenseal.inference import ONNXModel
 
 N_SAMPLES = 10000
 EVAL_DIR = Path(__file__).parent

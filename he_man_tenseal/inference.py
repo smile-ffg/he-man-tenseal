@@ -15,7 +15,7 @@ from loguru import logger
 from onnx import TensorProto, helper, numpy_helper
 from onnx.onnx_pb import StringStringEntryProto
 
-from tenseal_inference.config import KeyParamsConfig
+from he_man_tenseal.config import KeyParamsConfig
 
 OPSET_VERSION = 14
 
@@ -990,7 +990,7 @@ def _onnx_type_to_numpy(dtype: int) -> np.dtype:
         TensorProto.DataType.INT32: np.int32,
         TensorProto.DataType.INT64: np.int64,
         TensorProto.DataType.STRING: np.str_,
-        TensorProto.DataType.BOOL: np.bool8,
+        TensorProto.DataType.BOOL: np.bool_,
         TensorProto.DataType.FLOAT16: np.float16,
         TensorProto.DataType.DOUBLE: np.double,
         TensorProto.DataType.UINT32: np.uint32,

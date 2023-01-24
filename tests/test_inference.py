@@ -13,15 +13,15 @@ from test_definitions import (
     MODEL_DIR,
 )
 
-from tenseal_inference.config import (
+from he_man_tenseal.config import (
     DecryptConfig,
     EncryptConfig,
     InferenceConfig,
     KeyGenConfig,
     KeyParamsConfig,
 )
-from tenseal_inference.inference import ONNXModel
-from tenseal_inference.main import (
+from he_man_tenseal.inference import ONNXModel
+from he_man_tenseal.main import (
     run_decrypt,
     run_encrypt,
     run_inference,

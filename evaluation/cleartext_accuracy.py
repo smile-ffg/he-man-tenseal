@@ -5,8 +5,8 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from tenseal_inference.config import KeyParamsConfig
-from tenseal_inference.inference import ONNXModel
+from he_man_tenseal.config import KeyParamsConfig
+from he_man_tenseal.inference import ONNXModel
 
 EVAL_DIR = Path(__file__).parent
 MODEL_PATH = EVAL_DIR / "lenet5.onnx"
