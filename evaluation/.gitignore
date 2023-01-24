@@ -1,0 +1,6 @@
+# Ignore big LFW archive
+lfw_calibration-data.zip
+
+lfw_data/*
+lfw_calibration-data/*
+lfw_verification/*
