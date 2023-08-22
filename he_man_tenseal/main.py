@@ -5,7 +5,7 @@ import click
 import numpy as np
 import tenseal as ts
 from loguru import logger
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 from he_man_tenseal import config, crypto
 from he_man_tenseal.inference import ONNXModel

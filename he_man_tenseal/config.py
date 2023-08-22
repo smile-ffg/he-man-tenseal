@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import click
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 
 class GlobalSettings(BaseSettings):
