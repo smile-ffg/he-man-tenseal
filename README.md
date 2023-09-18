@@ -87,3 +87,23 @@ run pytest using:
 pre-commit run pytest
 ```
 this will generate a test coverage report in `htmlcov`
+
+## citing HE-MAN
+```bibtex
+@inproceedings{10.1145/3589883.3589889,
+  author = {Nocker, Martin and Drexel, David and Rader, Michael and Montuoro, Alessio and Sch\"{o}ttle, Pascal},
+  title = {HE-MAN – Homomorphically Encrypted MAchine Learning with ONnx Models},
+  year = {2023},
+  isbn = {9781450398329},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  url = {https://doi.org/10.1145/3589883.3589889},
+  doi = {10.1145/3589883.3589889},
+  booktitle = {Proceedings of the 2023 8th International Conference on Machine Learning Technologies},
+  pages = {35–45},
+  numpages = {11},
+  keywords = {Machine Learning as a Service, Homomorphic Encryption, Secure and Privacy-Preserving Machine Learning},
+  location = {Stockholm, Sweden},
+  series = {ICMLT '23}
+}
+```
