@@ -444,7 +444,8 @@ class ONNXModel:
             buffer = io.BytesIO()
             onnx.save(model, buffer)
             self.node_inference_session = onnxruntime.InferenceSession(
-                buffer.getvalue()
+                buffer.getvalue(),
+                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
             )
 
         def run_node_inference(self, inputs: Dict[str, np.ndarray]) -> np.ndarray:
@@ -560,6 +561,9 @@ class ONNXModel:
             state[self.output] = a + b
 
     class AveragePoolOperator(GemmWrappedOperator):
+        pass
+
+    class BatchNormalizationOperator(GemmWrappedOperator):
         pass
 
     class ConstantOperator(Operator):
@@ -934,42 +938,6 @@ class ONNXModel:
                 raise NotImplementedError("DivOperator not implemented for CKKSVector")
 
             state[self.output] = a / b
-
-    class BatchNormalizationOperator(Operator):
-        def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
-            super().__init__(model, node)
-            self.model.meta_info[self.output] = TensorMetaInfo(
-                multiplication_depth=(
-                    max(i.multiplication_depth for i in self.meta_info_inputs) + 1
-                ),
-                shape=self.meta_info_inputs[0].shape,
-                dtype=self.meta_info_inputs[0].dtype,
-                can_be_encrypted=True,
-            )
-
-        def execute(self, state: Dict[str, Union[ts.CKKSVector, np.ndarray]]) -> None:
-            X = state[self.inputs[0]]
-            if isinstance(X, ts.CKKSVector):
-                raise NotImplementedError(
-                    "BatchNormalizationOperator not implemented for CKKSVector"
-                )
-
-            scale = state[self.inputs[1]]
-            B = state[self.inputs[2]]
-            input_mean = state[self.inputs[3]]
-            input_var = state[self.inputs[4]]
-            epsilon = a.f if (a := self.attributes.get("epsilon")) is not None else 1e-5
-
-            dims_x = len(X.shape)
-            dim_ones = (1,) * (dims_x - 2)
-            scale = scale.reshape(-1, *dim_ones)
-            B = B.reshape(-1, *dim_ones)
-            input_mean = input_mean.reshape(-1, *dim_ones)
-            input_var = input_var.reshape(-1, *dim_ones)
-
-            Y = (X - input_mean) / np.sqrt(input_var + epsilon) * scale + B
-
-            state[self.output] = Y
 
 
 def _unwrap_scalar(x: Any) -> Any:

@@ -1,11 +1,12 @@
+from pathlib import Path
+
 import numpy as np
 import torchvision.transforms as transforms
-from pathlib import Path
-from torchvision import datasets
 from torch.utils.data import DataLoader
+from torchvision import datasets
 
 
-def generate_mnist_calibration_data(n_samples: int = 10000):
+def generate_mnist_calibration_data(n_samples: int = 10000) -> None:
     transformation = transforms.Compose(
         [transforms.Resize((32, 32)), transforms.ToTensor()]
     )
@@ -25,7 +26,7 @@ def generate_mnist_calibration_data(n_samples: int = 10000):
         np.savez_compressed(filename, calibration_data)
 
 
-def save_demo_sample():
+def save_demo_sample() -> None:
     transformation = transforms.Compose(
         [transforms.Resize((32, 32)), transforms.ToTensor()]
     )
