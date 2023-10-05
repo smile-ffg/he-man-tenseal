@@ -596,7 +596,8 @@ class ONNXModel:
                 if len(X.shape) > 2:
                     # values are repeated within one channel
                     # e.g. np.tile turns [1,2] into [1,2,1,2] for 2 batches
-                    # now, [1,2,1,2] -> [1,1,2,2,1,1,2,2] for 2 channels with 2x2 image
+                    # now, [1,2,1,2] -> [1,1,1,1,2,2,2,2,1,1,1,1,2,2,2,2]
+                    # for 2 channels with 2x2 image
                     w = np.repeat(w, np.prod(X.shape[2:]))
                     b = np.repeat(b, np.prod(X.shape[2:]))
 
