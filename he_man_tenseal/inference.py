@@ -563,8 +563,53 @@ class ONNXModel:
     class AveragePoolOperator(GemmWrappedOperator):
         pass
 
-    class BatchNormalizationOperator(GemmWrappedOperator):
-        pass
+    class BatchNormalizationOperator(Operator):
+        def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
+            super().__init__(model, node)
+            self.model.meta_info[self.output] = TensorMetaInfo(
+                multiplication_depth=(
+                    max(i.multiplication_depth for i in self.meta_info_inputs) + 1
+                ),
+                shape=self.meta_info_inputs[0].shape,
+                dtype=self.meta_info_inputs[0].dtype,
+                can_be_encrypted=self.meta_info_inputs[0].can_be_encrypted,
+            )
+
+        def execute(self, state: Dict[str, Union[ts.CKKSVector, np.ndarray]]) -> None:
+            X = state[self.inputs[0]]
+            scale = state[self.inputs[1]]
+            beta = state[self.inputs[2]]
+            input_mean = state[self.inputs[3]]
+            input_var = state[self.inputs[4]]
+            epsilon = a.f if (a := self.attributes.get("epsilon")) is not None else 1e-5
+
+            w = scale / np.sqrt(input_var + epsilon)
+            b = beta - input_mean * w
+
+            if isinstance(X, ts.CKKSVector):
+                # values are repeated across batches
+                # e.g. [1,2,3] -> [1,2,3,1,2,3] for 2 batches with 3 values
+                w = np.tile(w, X.shape[0])
+                b = np.tile(b, X.shape[0])
+
+                # <n>-dimensional case
+                if len(X.shape) > 2:
+                    # values are repeated within one channel
+                    # e.g. np.tile turns [1,2] into [1,2,1,2] for 2 batches
+                    # now, [1,2,1,2] -> [1,1,2,2,1,1,2,2] for 2 channels with 2x2 image
+                    w = np.repeat(w, np.prod(X.shape[2:]))
+                    b = np.repeat(b, np.prod(X.shape[2:]))
+
+            else:
+                dims_x = len(X.shape)
+                additional_dims = (1,) * (dims_x - 2)
+                w = w.reshape(-1, *additional_dims)
+                b = b.reshape(-1, *additional_dims)
+
+            Y1 = X * w
+            Y2 = Y1 + b
+
+            state[self.output] = Y2
 
     class ConstantOperator(Operator):
         def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):

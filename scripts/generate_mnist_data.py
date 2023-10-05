@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -36,12 +37,27 @@ def save_demo_sample() -> None:
     )
     test_loader = DataLoader(test_data, batch_size=1)
     sample = next(iter(test_loader))[0].numpy().astype(np.float32)
-    # mnist_sample = test_dataset_array.reshape(10000, 1, 32, 32).astype(np.float32)[0]
 
     path = Path(__file__).parent / ".." / "demo" / "mnist" / "input.npy"
     np.save(path, sample)
 
 
 if __name__ == "__main__":
-    # generate_mnist_calibration_data()
-    save_demo_sample()
+    parser = argparse.ArgumentParser(description="HE-MAN evaluation")
+    parser.add_argument(
+        "-m",
+        "--method",
+        type=str,
+        default="calibration",
+        choices=["calibration", "sample"],
+        help="Do you want to generate calibration data (.npz) "
+        "or an input sample (.npy)?",
+    )
+
+    args = parser.parse_args()
+    if args.method == "calibration":
+        generate_mnist_calibration_data()
+    elif args.method == "sample":
+        save_demo_sample()
+    else:
+        print("Invalid method parameter!")

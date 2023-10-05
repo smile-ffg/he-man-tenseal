@@ -100,7 +100,8 @@ def eval_model(model: BatchNormModel, input: torch.tensor) -> None:
     heman_model = ONNXModel(path=model_path, key_params_config=config)
     # reshape because GemmWrappedOperator.execute -> else branch: requires
     # input to 2D with shape (batch_size, *)
-    heman_output = heman_model(input.reshape(input.shape[0], -1))[0].numpy().flatten()
+    # heman_output = heman_model(input.reshape(input.shape[0], -1))[0].numpy().flatten()
+    heman_output = heman_model(input)[0].numpy().flatten()
 
     # save output
     np.save(f"bn{model.get_dim()}d_heman_output.npy", heman_output)
