@@ -606,10 +606,7 @@ class ONNXModel:
                 w = w.reshape(-1, *additional_dims)
                 b = b.reshape(-1, *additional_dims)
 
-            Y1 = X * w
-            Y2 = Y1 + b
-
-            state[self.output] = Y2
+            state[self.output] = X * w + b
 
     class ConstantOperator(Operator):
         def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
