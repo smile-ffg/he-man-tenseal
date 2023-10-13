@@ -587,19 +587,20 @@ class ONNXModel:
             b = beta - input_mean * w
 
             if isinstance(X, ts.CKKSVector):
+                input_shape = self.meta_info_inputs[0].shape
                 # values are repeated across batches
                 # e.g. [1,2,3] -> [1,2,3,1,2,3] for 2 batches with 3 values
-                w = np.tile(w, X.shape[0])
-                b = np.tile(b, X.shape[0])
+                w = np.tile(w, input_shape[0])
+                b = np.tile(b, input_shape[0])
 
                 # <n>-dimensional case
-                if len(X.shape) > 2:
+                if len(input_shape) > 2:
                     # values are repeated within one channel
                     # e.g. np.tile turns [1,2] into [1,2,1,2] for 2 batches
                     # now, [1,2,1,2] -> [1,1,1,1,2,2,2,2,1,1,1,1,2,2,2,2]
                     # for 2 channels with 2x2 image
-                    w = np.repeat(w, np.prod(X.shape[2:]))
-                    b = np.repeat(b, np.prod(X.shape[2:]))
+                    w = np.repeat(w, np.prod(input_shape[2:]))
+                    b = np.repeat(b, np.prod(input_shape[2:]))
 
             else:
                 dims_x = len(X.shape)

@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Union
 
 import numpy as np
+import tenseal as ts
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -44,7 +45,7 @@ class BatchNormModel(nn.Module):
 class BatchNorm1DModel(BatchNormModel):
     def __init__(self) -> None:
         super().__init__()
-        self.bn = nn.BatchNorm1d(100)
+        self.bn = nn.BatchNorm1d(1000)
 
     def to_string(self) -> str:
         return "BatchNorm1DModel"
@@ -56,7 +57,7 @@ class BatchNorm1DModel(BatchNormModel):
 class BatchNorm2DModel(BatchNormModel):
     def __init__(self) -> None:
         super().__init__()
-        self.bn = nn.BatchNorm2d(10)
+        self.bn = nn.BatchNorm2d(100)
 
     def to_string(self) -> str:
         return "BatchNorm2DModel"
@@ -71,10 +72,13 @@ def eval_model(model: BatchNormModel, input: torch.tensor) -> None:
     loss_fct = F.cross_entropy
 
     opt = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+
+    # training BN requires at least 2 batches
+    training_input = torch.cat((input, input))
     # pseudo-output for learning
-    y = torch.rand(input.shape)
+    y = torch.rand(training_input.shape)
     # one training iteration
-    pred = model(input)
+    pred = model(training_input)
     loss = loss_fct(pred, y)
     opt.zero_grad()
     loss.backward()
@@ -98,22 +102,35 @@ def eval_model(model: BatchNormModel, input: torch.tensor) -> None:
         domain_mode="min-max",  # won't be used
     )
     heman_model = ONNXModel(path=model_path, key_params_config=config)
-    # reshape because GemmWrappedOperator.execute -> else branch: requires
-    # input to 2D with shape (batch_size, *)
-    # heman_output = heman_model(input.reshape(input.shape[0], -1))[0].numpy().flatten()
-    heman_output = heman_model(input)[0].numpy().flatten()
+    # plaintext case
+    heman_pt_output = heman_model(input)[0].numpy().flatten()
 
     # save output
-    np.save(f"bn{model.get_dim()}d_heman_output.npy", heman_output)
+    np.save(f"bn{model.get_dim()}d_heman_output.npy", heman_pt_output)
 
-    print(f"diffs < 1e-6: {np.allclose(output, heman_output, atol=1e-6)}")
-    print(f"max error: {np.max(np.abs(output - heman_output))}")
+    print(f"diffs < 1e-6: {np.allclose(output, heman_pt_output, atol=1e-6)}")
+    print(f"max plaintext error: {np.max(np.abs(output - heman_pt_output))}")
+
+    # ciphertext case
+    context = ts.context(
+        ts.SCHEME_TYPE.CKKS,
+        poly_modulus_degree=8192,
+        coeff_mod_bit_sizes=[55, 50, 50, 55],
+    )
+    context.generate_galois_keys()
+    context.global_scale = 2**50
+
+    enc_input = ts.ckks_vector(context, input.ravel())
+
+    heman_ct_output = np.array(heman_model(enc_input)[0].decrypt())
+
+    print(f"max ciphertext error: {np.max(np.abs(output - heman_ct_output))}")
 
 
 def batchnorm_test() -> None:
     # create inputs for 1D and 2D
-    one_d_input = torch.rand(20, 100)
-    two_d_input = torch.randn(2, 10, 5, 5)
+    one_d_input = torch.rand(1, 1000)
+    two_d_input = torch.randn(1, 100, 5, 5)
 
     np.save("bn1d_input.npy", one_d_input.numpy().flatten())
     np.save("bn2d_input.npy", two_d_input.numpy().flatten())
