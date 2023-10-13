@@ -444,7 +444,8 @@ class ONNXModel:
             buffer = io.BytesIO()
             onnx.save(model, buffer)
             self.node_inference_session = onnxruntime.InferenceSession(
-                buffer.getvalue()
+                buffer.getvalue(),
+                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
             )
 
         def run_node_inference(self, inputs: Dict[str, np.ndarray]) -> np.ndarray:
@@ -561,6 +562,53 @@ class ONNXModel:
 
     class AveragePoolOperator(GemmWrappedOperator):
         pass
+
+    class BatchNormalizationOperator(Operator):
+        def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
+            super().__init__(model, node)
+            self.model.meta_info[self.output] = TensorMetaInfo(
+                multiplication_depth=(
+                    max(i.multiplication_depth for i in self.meta_info_inputs) + 1
+                ),
+                shape=self.meta_info_inputs[0].shape,
+                dtype=self.meta_info_inputs[0].dtype,
+                can_be_encrypted=self.meta_info_inputs[0].can_be_encrypted,
+            )
+
+        def execute(self, state: Dict[str, Union[ts.CKKSVector, np.ndarray]]) -> None:
+            X = state[self.inputs[0]]
+            scale = state[self.inputs[1]]
+            beta = state[self.inputs[2]]
+            input_mean = state[self.inputs[3]]
+            input_var = state[self.inputs[4]]
+            epsilon = a.f if (a := self.attributes.get("epsilon")) is not None else 1e-5
+
+            w = scale / np.sqrt(input_var + epsilon)
+            b = beta - input_mean * w
+
+            if isinstance(X, ts.CKKSVector):
+                input_shape = self.meta_info_inputs[0].shape
+                # values are repeated across batches
+                # e.g. [1,2,3] -> [1,2,3,1,2,3] for 2 batches with 3 values
+                w = np.tile(w, input_shape[0])
+                b = np.tile(b, input_shape[0])
+
+                # <n>-dimensional case
+                if len(input_shape) > 2:
+                    # values are repeated within one channel
+                    # e.g. np.tile turns [1,2] into [1,2,1,2] for 2 batches
+                    # now, [1,2,1,2] -> [1,1,1,1,2,2,2,2,1,1,1,1,2,2,2,2]
+                    # for 2 channels with 2x2 image
+                    w = np.repeat(w, np.prod(input_shape[2:]))
+                    b = np.repeat(b, np.prod(input_shape[2:]))
+
+            else:
+                dims_x = len(X.shape)
+                additional_dims = (1,) * (dims_x - 2)
+                w = w.reshape(-1, *additional_dims)
+                b = b.reshape(-1, *additional_dims)
+
+            state[self.output] = X * w + b
 
     class ConstantOperator(Operator):
         def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
@@ -934,42 +982,6 @@ class ONNXModel:
                 raise NotImplementedError("DivOperator not implemented for CKKSVector")
 
             state[self.output] = a / b
-
-    class BatchNormalizationOperator(Operator):
-        def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
-            super().__init__(model, node)
-            self.model.meta_info[self.output] = TensorMetaInfo(
-                multiplication_depth=(
-                    max(i.multiplication_depth for i in self.meta_info_inputs) + 1
-                ),
-                shape=self.meta_info_inputs[0].shape,
-                dtype=self.meta_info_inputs[0].dtype,
-                can_be_encrypted=True,
-            )
-
-        def execute(self, state: Dict[str, Union[ts.CKKSVector, np.ndarray]]) -> None:
-            X = state[self.inputs[0]]
-            if isinstance(X, ts.CKKSVector):
-                raise NotImplementedError(
-                    "BatchNormalizationOperator not implemented for CKKSVector"
-                )
-
-            scale = state[self.inputs[1]]
-            B = state[self.inputs[2]]
-            input_mean = state[self.inputs[3]]
-            input_var = state[self.inputs[4]]
-            epsilon = a.f if (a := self.attributes.get("epsilon")) is not None else 1e-5
-
-            dims_x = len(X.shape)
-            dim_ones = (1,) * (dims_x - 2)
-            scale = scale.reshape(-1, *dim_ones)
-            B = B.reshape(-1, *dim_ones)
-            input_mean = input_mean.reshape(-1, *dim_ones)
-            input_var = input_var.reshape(-1, *dim_ones)
-
-            Y = (X - input_mean) / np.sqrt(input_var + epsilon) * scale + B
-
-            state[self.output] = Y
 
 
 def _unwrap_scalar(x: Any) -> Any:

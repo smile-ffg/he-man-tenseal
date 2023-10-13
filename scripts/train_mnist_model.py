@@ -29,7 +29,7 @@ class MnistSquareModel(nn.Module):
         x = self.conv1(x)
         # square activation
         x = x * x
-        # flatten to [batch_size, 256]
+        # flatten to [batch_size, *]
         x = torch.flatten(x, start_dim=1)
         # fc1 layer
         x = self.fc1(x)

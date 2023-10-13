@@ -76,7 +76,10 @@ def test_inference(tmp_path):
             np.save(plaintext_input_path, x[0])
 
             # evaluate plaintext model
-            session = onnxruntime.InferenceSession(str(model_path))
+            session = onnxruntime.InferenceSession(
+                str(model_path),
+                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+            )
             y = session.run(None, {model.graph.input[0].name: x})[0]
 
             # encrypt input
@@ -204,7 +207,10 @@ def test_mnist_relu_inference(tmp_path):
     x = np.load(plaintext_input_path)
 
     # evaluate plaintext model
-    session = onnxruntime.InferenceSession(str(calibrated_model_path))
+    session = onnxruntime.InferenceSession(
+        str(calibrated_model_path),
+        providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+    )
     y = session.run(None, {model.graph.input[0].name: x})[0]
 
     # encrypt input
