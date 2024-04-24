@@ -442,6 +442,7 @@ class ONNXModel:
             # onnx.checker.check_model(model)
 
             buffer = io.BytesIO()
+            model.ir_version = 9
             onnx.save(model, buffer)
             self.node_inference_session = onnxruntime.InferenceSession(
                 buffer.getvalue(),

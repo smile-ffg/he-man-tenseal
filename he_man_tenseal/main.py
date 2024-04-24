@@ -13,7 +13,7 @@ from he_man_tenseal.inference import ONNXModel
 
 def config_args(cfg_class: BaseSettings) -> Callable:
     def annotator(function: Callable) -> Callable:
-        for key in cfg_class.__fields__:
+        for key in cfg_class.model_fields:
             if hasattr(cfg_class, "_%s" % key):
                 function = getattr(cfg_class, "_%s" % key)(function)
         return function
@@ -95,7 +95,7 @@ def decrypt(**kwargs: Any) -> None:
 
 
 def run_keyparams(cfg: config.KeyParamsConfig) -> None:
-    model = ONNXModel(cfg.model_path, cfg)
+    model = ONNXModel(cfg.onnx_path, cfg)
     key_params = crypto.find_optimal_parameters(cfg, model)
     key_params.save(cfg.key_params_path)
     model.save_calibrated_model()
@@ -115,7 +115,7 @@ def run_encrypt(cfg: config.EncryptConfig) -> None:
 
 
 def run_inference(cfg: config.InferenceConfig) -> None:
-    model = ONNXModel(cfg.model_path)
+    model = ONNXModel(cfg.onnx_path)
     context = crypto.load_context(cfg.key_path)
     input = crypto.load_vector(context, cfg.ciphertext_input_path)
     output = model(input)[0]

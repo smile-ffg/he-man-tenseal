@@ -11,14 +11,14 @@ class GlobalSettings(BaseSettings):
 
 
 class ModelInput(BaseSettings):
-    _model_path: Callable = click.option(
+    _onnx_path: Callable = click.option(
         "-m",
-        "--model-path",
+        "--onnx-path",
         type=click.Path(readable=True),
         required=True,
         help="Path of the model to be used",
     )
-    model_path: Path
+    onnx_path: Path
 
 
 class PrecisionInput(BaseSettings):

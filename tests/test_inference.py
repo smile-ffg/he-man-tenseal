@@ -41,7 +41,7 @@ def test_inference(tmp_path):
         run_keyparams(
             KeyParamsConfig(
                 key_params_path=key_params_path,
-                model_path=MODEL_DIR / "power2-plus-power4.onnx",
+                onnx_path=MODEL_DIR / "power2-plus-power4.onnx",
                 n_bits_fractional_precision=50,
                 calibration_data_path=CALIBRATION_DATA_DIR
                 / "lower_0_upper_5.npz",  # ==> n_bits_int_precision = 10
@@ -96,7 +96,7 @@ def test_inference(tmp_path):
             ciphertext_output_path = tmp_path / "output.enc"
             run_inference(
                 InferenceConfig(
-                    model_path=model_path,
+                    onnx_path=model_path,
                     key_path=evaluation_key_path,
                     ciphertext_input_path=ciphertext_input_path,
                     ciphertext_output_path=ciphertext_output_path,
@@ -156,7 +156,7 @@ def test_multiplication_depth(model_filename, multiplication_depth):
     [
         (
             KeyParamsConfig(
-                model_path=MODEL_DIR / "3-bit-int-model.onnx",
+                onnx_path=MODEL_DIR / "3-bit-int-model.onnx",
                 key_params_path="/",
                 n_bits_fractional_precision=50,
                 calibration_data_path=CALIBRATION_DATA_DIR / "lower_-1_upper_1.npz",
@@ -168,7 +168,7 @@ def test_multiplication_depth(model_filename, multiplication_depth):
     ],
 )
 def test_int_precision(keyparams_cfg, n_bits_integer_precision):
-    model = ONNXModel(keyparams_cfg.model_path, keyparams_cfg)
+    model = ONNXModel(keyparams_cfg.onnx_path, keyparams_cfg)
     assert model.n_bits_integer_precision == n_bits_integer_precision
 
 
@@ -186,7 +186,7 @@ def test_mnist_relu_inference(tmp_path):
     run_keyparams(
         KeyParamsConfig(
             key_params_path=key_params_path,
-            model_path=model_path,
+            onnx_path=model_path,
             n_bits_fractional_precision=22,
             calibration_data_path=CALIBRATION_DATA_DIR / "mnist_28x28.zip",
             relu_mode="deg3",
@@ -227,7 +227,7 @@ def test_mnist_relu_inference(tmp_path):
     ciphertext_output_path = tmp_path / "output.enc"
     run_inference(
         InferenceConfig(
-            model_path=calibrated_model_path,
+            onnx_path=calibrated_model_path,
             key_path=evaluation_key_path,
             ciphertext_input_path=ciphertext_input_path,
             ciphertext_output_path=ciphertext_output_path,

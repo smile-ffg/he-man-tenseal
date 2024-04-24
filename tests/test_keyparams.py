@@ -17,7 +17,7 @@ from he_man_tenseal.inference import ONNXModel
         (
             # required [32, 25, 25, 25, 32] (sum 139) can be improved
             KeyParamsConfig(
-                model_path=FIXED_DEPTH_MODELS_DIR / "depth3.onnx",
+                onnx_path=FIXED_DEPTH_MODELS_DIR / "depth3.onnx",
                 key_params_path="/",
                 n_bits_fractional_precision=25,
                 calibration_data_path=CALIBRATION_DATA_DIR
@@ -31,7 +31,7 @@ from he_man_tenseal.inference import ONNXModel
         (
             # requried [40, 29, 40] (sum 109) cannot be improved
             KeyParamsConfig(
-                model_path=FIXED_DEPTH_MODELS_DIR / "depth1.onnx",
+                onnx_path=FIXED_DEPTH_MODELS_DIR / "depth1.onnx",
                 key_params_path="/",
                 n_bits_fractional_precision=29,
                 calibration_data_path=CALIBRATION_DATA_DIR
@@ -45,7 +45,7 @@ from he_man_tenseal.inference import ONNXModel
         (
             # requried [40, 30, 40] (sum 110) must not be improved beyond [60, 50, 60]
             KeyParamsConfig(
-                model_path=FIXED_DEPTH_MODELS_DIR / "depth1.onnx",
+                onnx_path=FIXED_DEPTH_MODELS_DIR / "depth1.onnx",
                 key_params_path="/",
                 n_bits_fractional_precision=30,
                 calibration_data_path=CALIBRATION_DATA_DIR
@@ -59,7 +59,7 @@ from he_man_tenseal.inference import ONNXModel
         (
             # required [25, 22, 22, 25] (sum 96) can be improved to [29, 25, 25, 29]
             KeyParamsConfig(
-                model_path=APPROXIMATED_MODELS_DIR / "relu.onnx",
+                onnx_path=APPROXIMATED_MODELS_DIR / "relu.onnx",
                 key_params_path="/",
                 n_bits_fractional_precision=22,
                 calibration_data_path=CALIBRATION_DATA_DIR
@@ -75,7 +75,7 @@ from he_man_tenseal.inference import ONNXModel
 def test_find_optimal_parameters(
     keyparams_cfg, n_bits_int_precision_expected, parameters_expected
 ):
-    model = ONNXModel(keyparams_cfg.model_path, keyparams_cfg)
+    model = ONNXModel(keyparams_cfg.onnx_path, keyparams_cfg)
     assert model.n_bits_integer_precision == n_bits_int_precision_expected
     key_params = find_optimal_parameters(keyparams_cfg, model)
     assert key_params.poly_modulus_degree == parameters_expected[0]
@@ -87,7 +87,7 @@ def test_find_optimal_parameters(
     [
         (
             KeyParamsConfig(
-                model_path=MODEL_DIR / "power2-plus-power4.onnx",
+                onnx_path=MODEL_DIR / "power2-plus-power4.onnx",
                 key_params_path="/",
                 n_bits_fractional_precision=30,
                 calibration_data_path=CALIBRATION_DATA_DIR / "lower_0_upper_200.npz",
@@ -98,6 +98,6 @@ def test_find_optimal_parameters(
     ],
 )
 def test_model_resulting_in_invalid_keyparams(keyparams_cfg):
-    model = ONNXModel(keyparams_cfg.model_path, keyparams_cfg)
+    model = ONNXModel(keyparams_cfg.onnx_path, keyparams_cfg)
     with pytest.raises(ValueError):
         find_optimal_parameters(keyparams_cfg, model)

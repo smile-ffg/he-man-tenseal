@@ -25,7 +25,7 @@ def test_encrypt_decrypt(tmp_path):
     run_keyparams(
         KeyParamsConfig(
             key_params_path=key_params_path,
-            model_path=model_path,
+            onnx_path=model_path,
             n_bits_fractional_precision=30,
             calibration_data_path=calibration_data_dir
             / "lower_0_upper_1000.npz",  # ==> n_bits_int_precision=10
@@ -85,7 +85,7 @@ def test_encrypt_with_evaluation_key(tmp_path):
     run_keyparams(
         KeyParamsConfig(
             key_params_path=key_params_path,
-            model_path=model_path,
+            onnx_path=model_path,
             n_bits_fractional_precision=30,
             calibration_data_path=calibration_data_dir
             / "lower_0_upper_1000.npz",  # ==> n_bits_int_precision=10
