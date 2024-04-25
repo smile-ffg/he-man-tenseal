@@ -537,6 +537,85 @@ class ONNXModel:
 
                 state[self.output] = result
 
+    class PolyApproxOperator(Operator):
+        def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
+            super().__init__(model, node)
+            self.degree = 0
+            self.no_offset = False
+            relu_mode = self.model.relu_mode
+
+            if relu_mode is None:
+                raise ValueError("Missing relu_mode.")
+            elif relu_mode.startswith("deg"):
+                self.degree = int(relu_mode.split("_")[0][3:])
+                if self.degree < 1:
+                    raise ValueError("Invalid degree for relu approximation.")
+                if relu_mode.endswith("no_offset"):
+                    self.no_offset = True
+            else:
+                raise ValueError("Invalid ReLU approximation mode.")
+
+            self.relu_mode = relu_mode
+
+            # plus one for the coefficient multiplication
+            relu_multiplications = floor(log2(self.degree)) + 1
+
+            multiplication_depth = relu_multiplications + max(
+                i.multiplication_depth for i in self.meta_info_inputs
+            )
+
+            self.model.meta_info[self.output] = TensorMetaInfo(
+                multiplication_depth=multiplication_depth,
+                shape=self.meta_info_inputs[0].shape,
+                dtype=self.meta_info_inputs[0].dtype,
+                can_be_encrypted=self.meta_info_inputs[0].can_be_encrypted,
+            )
+
+        def execute_on_plaintext(self, x: np.ndarray) -> np.ndarray:
+            raise NotImplementedError("TODO: Implement in derived operator classes")
+
+        def _compute_polynomial_coeffs(self, interval: Interval) -> List[float]:
+            lower = interval.lower_bound * self.model._domain_factors[0]
+            upper = interval.upper_bound * self.model._domain_factors[1]
+
+            if lower >= 0:
+                # return linear model
+                return [1, 0]
+            elif upper <= 0:
+                # this would give a zero model
+                raise ValueError("Relu would produce a zero model.")
+
+            x_eval = np.linspace(lower, upper, 1000)
+            coeffs = np.polyfit(
+                x_eval, self.execute_on_plaintext(x_eval), self.degree
+            ).tolist()
+            if self.no_offset:
+                coeffs[-1] = 0
+
+            return coeffs
+
+        def execute(self, state: Dict[str, Union[ts.CKKSVector, np.ndarray]]) -> None:
+            x = state[self.inputs[0]]
+
+            if self.meta_info_inputs[0].domain is not None:
+                domain = self.meta_info_inputs[0].domain
+            elif isinstance(x, np.ndarray):
+                # calibration case
+                domain = Interval(np.amin(x), np.amax(x))
+            else:
+                raise ValueError(
+                    "ReLU requires a calibrated model for encrypted inference."
+                )
+
+            coeffs = self._compute_polynomial_coeffs(domain)
+
+            if isinstance(x, np.ndarray):
+                y = np.polyval(coeffs, x)
+            else:
+                y = x.polyval(coeffs[::-1])
+
+            state[self.output] = y
+
     class AddOperator(Operator):
         def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
             super().__init__(model, node)
@@ -739,6 +818,10 @@ class ONNXModel:
 
             state[self.output] = result
 
+    class HardSwishOperator(PolyApproxOperator):
+        def execute_on_plaintext(self, x: np.ndarray) -> np.ndarray:
+            return x * np.maximum(0, np.minimum(1, x / 6 + 0.5))
+
     class MatMulOperator(Operator):
         def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
             super().__init__(model, node)
@@ -817,82 +900,9 @@ class ONNXModel:
             else:
                 super().execute(state)
 
-    class ReluOperator(Operator):
-        def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
-            super().__init__(model, node)
-            self.degree = 0
-            self.no_offset = False
-            relu_mode = self.model.relu_mode
-
-            if relu_mode is None:
-                raise ValueError("Missing relu_mode.")
-            elif relu_mode.startswith("deg"):
-                self.degree = int(relu_mode.split("_")[0][3:])
-                if self.degree < 1:
-                    raise ValueError("Invalid degree for relu approximation.")
-                if relu_mode.endswith("no_offset"):
-                    self.no_offset = True
-            else:
-                raise ValueError("Invalid ReLU approximation mode.")
-
-            self.relu_mode = relu_mode
-
-            # plus one for the coefficient multiplication
-            relu_multiplications = floor(log2(self.degree)) + 1
-
-            multiplication_depth = relu_multiplications + max(
-                i.multiplication_depth for i in self.meta_info_inputs
-            )
-
-            self.model.meta_info[self.output] = TensorMetaInfo(
-                multiplication_depth=multiplication_depth,
-                shape=self.meta_info_inputs[0].shape,
-                dtype=self.meta_info_inputs[0].dtype,
-                can_be_encrypted=self.meta_info_inputs[0].can_be_encrypted,
-            )
-
-        def _relu(self, x: np.ndarray) -> np.ndarray:
+    class ReluOperator(PolyApproxOperator):
+        def execute_on_plaintext(self, x: np.ndarray) -> np.ndarray:
             return np.max([x, np.zeros_like(x)], axis=0)
-
-        def _compute_polynomial_coeffs(self, interval: Interval) -> List[float]:
-            lower = interval.lower_bound * self.model._domain_factors[0]
-            upper = interval.upper_bound * self.model._domain_factors[1]
-
-            if lower >= 0:
-                # return linear model
-                return [1, 0]
-            elif upper <= 0:
-                # this would give a zero model
-                raise ValueError("Relu would produce a zero model.")
-
-            x_eval = np.linspace(lower, upper, 1000)
-            coeffs = np.polyfit(x_eval, self._relu(x_eval), self.degree).tolist()
-            if self.no_offset:
-                coeffs[-1] = 0
-
-            return coeffs
-
-        def execute(self, state: Dict[str, Union[ts.CKKSVector, np.ndarray]]) -> None:
-            x = state[self.inputs[0]]
-
-            if self.meta_info_inputs[0].domain is not None:
-                domain = self.meta_info_inputs[0].domain
-            elif isinstance(x, np.ndarray):
-                # calibration case
-                domain = Interval(np.amin(x), np.amax(x))
-            else:
-                raise ValueError(
-                    "ReLU requires a calibrated model for encrypted inference."
-                )
-
-            coeffs = self._compute_polynomial_coeffs(domain)
-
-            if isinstance(x, np.ndarray):
-                y = np.polyval(coeffs, x)
-            else:
-                y = x.polyval(coeffs[::-1])
-
-            state[self.output] = y
 
     class ReshapeOperator(Operator):
         def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
