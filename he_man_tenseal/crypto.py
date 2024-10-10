@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Tuple
 
+import numpy as np
 import tenseal as ts
 from loguru import logger
 
@@ -210,3 +211,12 @@ def load_vector(context: ts.Context, path: Path) -> ts.CKKSVector:
     """
     with open(path, "rb") as input_file:
         return ts.ckks_vector_from(context, input_file.read())
+
+
+def load_plaintext_or_ciphertext_vector(
+    context: ts.Context, path: Path
+) -> ts.CKKSVector | np.ndarray:
+    try:
+        return np.load(path)
+    except ValueError:
+        return load_vector(context, path)

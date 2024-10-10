@@ -1,4 +1,5 @@
 import pytest
+from he_man_tenseal.util import load_calibration_data
 from test_definitions import (
     APPROXIMATED_MODELS_DIR,
     CALIBRATION_DATA_DIR,
@@ -24,6 +25,7 @@ from he_man_tenseal.inference import ONNXModel
                 / "lower_0_upper_100.npz",  # ==> n_bits_int_precision=7
                 relu_mode="deg3",
                 domain_mode="min-max",
+                split=0,
             ),
             7,
             (8192, [49, 40, 40, 40, 49]),
@@ -38,6 +40,7 @@ from he_man_tenseal.inference import ONNXModel
                 / "lower_2000_upper_2000.npz",  # ==> n_bits_int_precision=11
                 relu_mode="deg3",
                 domain_mode="min-max",
+                split=0,
             ),
             11,
             (4096, [40, 29, 40]),
@@ -52,6 +55,7 @@ from he_man_tenseal.inference import ONNXModel
                 / "lower_-512_upper_0.npz",  # ==> n_bits_int_precision=10
                 relu_mode="deg3",
                 domain_mode="min-max",
+                split=0,
             ),
             10,
             (8192, [60, 50, 60]),
@@ -66,6 +70,7 @@ from he_man_tenseal.inference import ONNXModel
                 / "lower_0_upper_5.npz",  # ==> n_bits_int_pre
                 relu_mode="deg3",
                 domain_mode="min-max",
+                split=0,
             ),
             3,
             (4096, [29, 25, 25, 29]),
@@ -76,6 +81,8 @@ def test_find_optimal_parameters(
     keyparams_cfg, n_bits_int_precision_expected, parameters_expected
 ):
     model = ONNXModel(keyparams_cfg.onnx_path, keyparams_cfg)
+    calibration_data = load_calibration_data(keyparams_cfg.calibration_data_path)
+    model.calibrate(calibration_data)
     assert model.n_bits_integer_precision == n_bits_int_precision_expected
     key_params = find_optimal_parameters(keyparams_cfg, model)
     assert key_params.poly_modulus_degree == parameters_expected[0]
@@ -93,11 +100,14 @@ def test_find_optimal_parameters(
                 calibration_data_path=CALIBRATION_DATA_DIR / "lower_0_upper_200.npz",
                 relu_mode="deg3",
                 domain_mode="min-max",
+                split=0,
             )  # 31 bits integer + 30 bits fractional precision > 60 bits
         )
     ],
 )
 def test_model_resulting_in_invalid_keyparams(keyparams_cfg):
     model = ONNXModel(keyparams_cfg.onnx_path, keyparams_cfg)
+    calibration_data = load_calibration_data(keyparams_cfg.calibration_data_path)
+    model.calibrate(calibration_data)
     with pytest.raises(ValueError):
         find_optimal_parameters(keyparams_cfg, model)

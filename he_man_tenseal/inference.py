@@ -1,10 +1,11 @@
 import io
 import json
+from tempfile import NamedTemporaryFile
 import time
 from dataclasses import dataclass
 from math import floor, log2
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import onnx
@@ -17,6 +18,7 @@ from onnx.onnx_pb import StringStringEntryProto
 
 from he_man_tenseal.config import KeyParamsConfig
 
+IR_VERSION = 9
 OPSET_VERSION = 14
 
 
@@ -69,9 +71,9 @@ class ONNXModel:
         key_params_config: Optional[KeyParamsConfig] = None,
         domain_factors: tuple = (1.0, 1.0),
     ):
+        self._key_params_config = key_params_config
         self._domain_factors = domain_factors
         self._model = onnx.load(path)
-        self._path = path
         self._n_inputs = len(self._model.graph.input)
         self._initializer_state = {
             initializer.name: numpy_helper.to_array(initializer)
@@ -87,15 +89,6 @@ class ONNXModel:
 
         self.domain_min = 0
         self.domain_max = 0
-
-        if key_params_config is not None:
-            # bring calibration-data into a single batch structure
-            calibration_data = np.load(key_params_config.calibration_data_path)
-
-            calibration_data = np.array(
-                [calibration_data[file] for file in calibration_data.files]
-            )
-            calibration_data = calibration_data.reshape(-1, *calibration_data.shape[2:])
 
         meta_info_initializers = {
             initializer.name: TensorMetaInfo(
@@ -129,10 +122,7 @@ class ONNXModel:
 
         self._operators = [self._create_operator(node) for node in self.nodes]
 
-        if key_params_config is not None:
-            self._calibrate(calibration_data, key_params_config.domain_mode)
-        else:
-            self._load_domains_from_onnx_metadata()
+        self._load_domains_from_onnx_metadata()
 
     def _create_operator(self, node: onnx.onnx_ml_pb2.NodeProto) -> "Operator":
         try:
@@ -185,7 +175,7 @@ class ONNXModel:
         )
 
     def __call__(
-        self, *inputs: List[Union[ts.CKKSVector, np.ndarray]]
+        self, *inputs: ts.CKKSVector | np.ndarray
     ) -> List[Union[ts.CKKSVector, np.ndarray]]:
         state = self._forward(*inputs)
         return [state[output.name] for output in self.outputs]
@@ -225,9 +215,14 @@ class ONNXModel:
         }
         return result
 
-    def _calibrate(self, calibration_data: np.ndarray, method: str) -> None:
+    def calibrate(self, calibration_data: Sequence[np.ndarray]) -> None:
+        if self._key_params_config is None:
+            raise ValueError("Cannot calibrate model w/o key_params_config")
+
+        method = self._key_params_config.domain_mode
+
         # forward pass using calibration data
-        state = self._forward(calibration_data)
+        state = self._forward(*calibration_data)
 
         if method == "mean-std":
             domains = {
@@ -332,17 +327,115 @@ class ONNXModel:
         else:
             self.relu_mode = None
 
-    def save_calibrated_model(self, suffix: str = "") -> None:
-        calibrated_model_path = self._path.parent / (
-            self._path.stem + "_calibrated" + suffix + self._path.suffix
-        )
-        if calibrated_model_path.exists():
+    def save(
+        self, path: Path, overwrite: bool = True, suffix: str | None = None
+    ) -> None:
+        if suffix is not None:
+            path = path.parent / f"{path.stem}_{suffix}{path.suffix}"
+        if not overwrite and path.exists():
             raise FileExistsError(
-                f"There is already a file named {calibrated_model_path.name} "
-                f"in {calibrated_model_path.parent}"
+                f"There is already a file named {path.name} in {path.parent}"
+            )
+        onnx.save(self._model, path)
+
+    def split_preprocessing(
+        self, num_preprocessing_steps: int
+    ) -> tuple["ONNXModel", "ONNXModel"]:
+        preprocessing_nodes, remaining_nodes = self.split_preprocessing_nodes(
+            num_preprocessing_steps
+        )
+        logger.debug(
+            f"preprocessing nodes: {', '.join(n.name for n in preprocessing_nodes)}"
+        )
+        logger.debug(f"remaining nodes: {', '.join(n.name for n in remaining_nodes)}")
+        preprocessing_model = self.get_subset_model(
+            f"{self._model.graph.name}-preprocessing", preprocessing_nodes
+        )
+        core_model = self.get_subset_model(
+            f"{self._model.graph.name}-core", remaining_nodes
+        )
+        return preprocessing_model, core_model
+
+    def split_preprocessing_nodes(
+        self, num_preprocessing_steps: int
+    ) -> tuple[list[onnx.onnx_ml_pb2.NodeProto], list[onnx.onnx_ml_pb2.NodeProto]]:
+        nodes_by_name = {n.name: n for n in self.nodes}
+        next_input_names = {i.name for i in self.inputs}
+        preprocessing_node_names: set[str] = set()
+        for step in range(num_preprocessing_steps):
+            new_node_names = {
+                n.name
+                for n in self.nodes
+                if any(i in next_input_names for i in n.input)
+            } - preprocessing_node_names
+            if len(new_node_names) == 0:
+                raise ValueError(
+                    f"Only {step - 1} preprocessing steps can be split, but "
+                    f"{num_preprocessing_steps} were requested"
+                )
+            next_input_names = {
+                node_output_name
+                for new_node_name in new_node_names
+                for node_output_name in nodes_by_name[new_node_name].output
+            }
+            preprocessing_node_names |= new_node_names
+        preprocessing_nodes = [
+            n for n in self.nodes if n.name in preprocessing_node_names
+        ]
+        remaining_nodes = [
+            n for n in self.nodes if n.name not in preprocessing_node_names
+        ]
+        return preprocessing_nodes, remaining_nodes
+
+    def get_subset_model(
+        self, new_model_name: str, nodes: list[onnx.onnx_ml_pb2.NodeProto]
+    ) -> "ONNXModel":
+        all_input_names = {i for n in nodes for i in n.input}
+        all_output_names = {o for n in nodes for o in n.output}
+
+        input_and_initializer_names = all_input_names - all_output_names
+        initializer_names = input_and_initializer_names & {
+            i.name for i in self.initializers
+        }
+        input_names = input_and_initializer_names - initializer_names
+
+        output_names = all_output_names - all_input_names
+
+        graph_inputs = [
+            helper.make_tensor_value_info(
+                input_name,
+                self.meta_info[input_name].dtype,
+                self.meta_info[input_name].shape,
+            )
+            for input_name in input_names
+        ]
+        graph_outputs = [
+            helper.make_tensor_value_info(
+                output_name,
+                self.meta_info[output_name].dtype,
+                self.meta_info[output_name].shape,
+            )
+            for output_name in output_names
+        ]
+        graph_initializers = [
+            i for i in self.initializers if i.name in initializer_names
+        ]
+        graph = helper.make_graph(
+            nodes, new_model_name, graph_inputs, graph_outputs, graph_initializers
+        )
+        model = helper.make_model(graph)
+        model.opset_import[0].version = OPSET_VERSION
+        onnx.checker.check_model(model)
+        model.ir_version = IR_VERSION
+
+        with NamedTemporaryFile() as file:
+            onnx.save(model, file)
+            file.seek(0)
+            subset_model = ONNXModel(
+                Path(file.name), self._key_params_config, self._domain_factors
             )
 
-        onnx.save(self._model, calibrated_model_path)
+        return subset_model
 
     @property
     def multiplication_depth(self) -> int:
@@ -442,11 +535,11 @@ class ONNXModel:
             # onnx.checker.check_model(model)
 
             buffer = io.BytesIO()
-            model.ir_version = 9
+            model.ir_version = IR_VERSION
             onnx.save(model, buffer)
             self.node_inference_session = onnxruntime.InferenceSession(
                 buffer.getvalue(),
-                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+                # providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
             )
 
         def run_node_inference(self, inputs: Dict[str, np.ndarray]) -> np.ndarray:
@@ -821,6 +914,19 @@ class ONNXModel:
     class HardSwishOperator(PolyApproxOperator):
         def execute_on_plaintext(self, x: np.ndarray) -> np.ndarray:
             return x * np.maximum(0, np.minimum(1, x / 6 + 0.5))
+
+    class IdentityOperator(Operator):
+        def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):
+            super().__init__(model, node)
+            self.model.meta_info[self.output] = TensorMetaInfo(
+                multiplication_depth=self.meta_info_inputs[0].multiplication_depth,
+                shape=self.meta_info_inputs[0].shape,
+                dtype=self.meta_info_inputs[0].dtype,
+                can_be_encrypted=self.meta_info_inputs[0].can_be_encrypted,
+            )
+
+        def execute(self, state: Dict[str, ts.CKKSVector | np.ndarray]) -> None:
+            state[self.output] = _unwrap_scalar(state[self.inputs[0]])
 
     class MatMulOperator(Operator):
         def __init__(self, model: "ONNXModel", node: onnx.onnx_ml_pb2.NodeProto):

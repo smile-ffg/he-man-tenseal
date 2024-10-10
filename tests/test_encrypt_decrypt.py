@@ -31,6 +31,7 @@ def test_encrypt_decrypt(tmp_path):
             / "lower_0_upper_1000.npz",  # ==> n_bits_int_precision=10
             relu_mode="deg3",
             domain_mode="min-max",
+            split=0,
         )
     )
 
@@ -91,6 +92,7 @@ def test_encrypt_with_evaluation_key(tmp_path):
             / "lower_0_upper_1000.npz",  # ==> n_bits_int_precision=10
             relu_mode="deg3",
             domain_mode="min-max",
+            split=0,
         )
     )
 

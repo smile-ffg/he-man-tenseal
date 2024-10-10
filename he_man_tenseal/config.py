@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 import click
 from pydantic_settings import BaseSettings
@@ -77,6 +77,16 @@ class KeyInput(BaseSettings):
         help="Path to load the key from",
     )
     key_path: Path
+
+
+class OptionalKeyInput(BaseSettings):
+    _key_path: Callable = click.option(
+        "-k",
+        "--key-path",
+        type=click.Path(readable=True),
+        help="Path to load the key from",
+    )
+    key_path: Path | None
 
 
 class PlaintextOutput(BaseSettings):
@@ -167,6 +177,42 @@ class DomainCalibrationMode(BaseSettings):
     domain_mode: str
 
 
+class MultiPlaintextOrCiphertextInputs(BaseSettings):
+    _input_path: Callable = click.option(
+        "-i",
+        "--input-path",
+        type=click.Path(readable=True),
+        required=True,
+        multiple=True,
+        help="Path of a file containing plaintext or ciphertext input",
+    )
+    input_path: Sequence[Path]
+
+
+class MultiPlaintextOrCiphertextOutputs(BaseSettings):
+    _output_path: Callable = click.option(
+        "-o",
+        "--output-path",
+        type=click.Path(writable=True),
+        required=True,
+        multiple=True,
+        help="Path of a file to store plaintext or ciphertext output",
+    )
+    output_path: Sequence[Path]
+
+
+class SplitModelInput(BaseSettings):
+    _split: Callable = click.option(
+        "-s",
+        "--split",
+        type=int,
+        default=0,
+        required=False,
+        help="Depth of operations to split into preprocessing model",
+    )
+    split: int
+
+
 class KeyParamsConfig(
     GlobalSettings,
     ModelInput,
@@ -175,6 +221,7 @@ class KeyParamsConfig(
     ReluApproximationMode,
     DomainCalibrationMode,
     KeyParamsOutput,
+    SplitModelInput,
 ):
     pass
 
@@ -188,7 +235,11 @@ class EncryptConfig(GlobalSettings, KeyInput, PlaintextInput, CiphertextOutput):
 
 
 class InferenceConfig(
-    GlobalSettings, ModelInput, KeyInput, CiphertextInput, CiphertextOutput
+    GlobalSettings,
+    ModelInput,
+    OptionalKeyInput,
+    MultiPlaintextOrCiphertextInputs,
+    MultiPlaintextOrCiphertextOutputs,
 ):
     pass
 

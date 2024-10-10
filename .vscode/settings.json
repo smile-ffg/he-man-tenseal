@@ -1,8 +1,6 @@
 {
-    "python.linting.flake8Enabled": true,
-    "python.linting.flake8Args": [
-        "--max-line-length=88"
-    ],
-    "python.linting.enabled": true,
-    "python.formatting.provider": "black"
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    }
 }

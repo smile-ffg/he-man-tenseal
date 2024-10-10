@@ -1,11 +1,13 @@
 import os
 from pathlib import Path
+from shutil import copyfile
 
 import numpy as np
 import onnx
 import onnxruntime
 import pytest
 from loguru import logger
+from he_man_tenseal.util import load_calibration_data
 from test_definitions import (
     APPROXIMATED_MODELS_DIR,
     CALIBRATION_DATA_DIR,
@@ -47,6 +49,7 @@ def test_inference(tmp_path):
                 / "lower_0_upper_5.npz",  # ==> n_bits_int_precision = 10
                 relu_mode="deg3",
                 domain_mode="min-max",
+                split=0,
             )
         )
 
@@ -98,8 +101,8 @@ def test_inference(tmp_path):
                 InferenceConfig(
                     onnx_path=model_path,
                     key_path=evaluation_key_path,
-                    ciphertext_input_path=ciphertext_input_path,
-                    ciphertext_output_path=ciphertext_output_path,
+                    input_path=[ciphertext_input_path],
+                    output_path=[ciphertext_output_path],
                 )
             )
 
@@ -162,6 +165,7 @@ def test_multiplication_depth(model_filename, multiplication_depth):
                 calibration_data_path=CALIBRATION_DATA_DIR / "lower_-1_upper_1.npz",
                 relu_mode="deg3",
                 domain_mode="min-max",
+                split=0,
             ),
             3,
         )
@@ -169,6 +173,8 @@ def test_multiplication_depth(model_filename, multiplication_depth):
 )
 def test_int_precision(keyparams_cfg, n_bits_integer_precision):
     model = ONNXModel(keyparams_cfg.onnx_path, keyparams_cfg)
+    calibration_data = load_calibration_data(keyparams_cfg.calibration_data_path)
+    model.calibrate(calibration_data)
     assert model.n_bits_integer_precision == n_bits_integer_precision
 
 
@@ -191,6 +197,7 @@ def test_mnist_relu_inference(tmp_path):
             calibration_data_path=CALIBRATION_DATA_DIR / "mnist_28x28.zip",
             relu_mode="deg3",
             domain_mode="min-max",
+            split=0,
         )
     )
 
@@ -229,8 +236,8 @@ def test_mnist_relu_inference(tmp_path):
         InferenceConfig(
             onnx_path=calibrated_model_path,
             key_path=evaluation_key_path,
-            ciphertext_input_path=ciphertext_input_path,
-            ciphertext_output_path=ciphertext_output_path,
+            input_path=[ciphertext_input_path],
+            output_path=[ciphertext_output_path],
         )
     )
 
@@ -251,3 +258,98 @@ def test_mnist_relu_inference(tmp_path):
     # delete calibrated model
     if calibrated_model_path.exists():
         os.remove(calibrated_model_path)
+
+
+def test_inference_split(tmp_path):
+    model_path = tmp_path / "model.onnx"
+    copyfile(MODEL_DIR / "power2-plus-power4.onnx", model_path)
+    preprocessing_model_path = tmp_path / "model_preprocessing.onnx"
+    calibrated_core_model_path = tmp_path / "model_core_calibrated.onnx"
+    calibration_data_path = CALIBRATION_DATA_DIR / "lower_-1_upper_1.npz"
+    key_params_path = tmp_path / "keyparams.json"
+    secret_key_path = tmp_path / "key"
+    evaluation_key_path = Path(f"{secret_key_path}.pub")
+    plaintext_input = np.asarray([-1, -0.42, 0, 0.84, 1], dtype=np.float32)
+    plaintext_input_path = tmp_path / "input.npy"
+    np.save(plaintext_input_path, plaintext_input)
+    intermediate_plaintext_path = tmp_path / "intermediate.npy"
+    intermediate_ciphertext_path = tmp_path / "intermediate.enc"
+    ciphertext_output_path = tmp_path / "output.enc"
+    plaintext_output_path = tmp_path / "output.npy"
+    test_output_path = tmp_path / "output_test.npy"
+
+    run_inference(
+        InferenceConfig(
+            onnx_path=model_path,
+            key_path=None,
+            input_path=[plaintext_input_path],
+            output_path=[test_output_path],
+        )
+    )
+    assert test_output_path.is_file()
+    test_output = np.load(test_output_path)
+
+    run_keyparams(
+        KeyParamsConfig(
+            key_params_path=key_params_path,
+            onnx_path=model_path,
+            n_bits_fractional_precision=50,
+            calibration_data_path=calibration_data_path,
+            relu_mode="deg3",
+            domain_mode="min-max",
+            split=1,
+        )
+    )
+    assert key_params_path.is_file()
+    assert preprocessing_model_path.is_file()
+    assert calibrated_core_model_path.is_file()
+
+    run_keygen(
+        KeyGenConfig(
+            key_params_path=key_params_path,
+            secret_key_path=secret_key_path,
+        )
+    )
+    assert secret_key_path.is_file()
+    assert evaluation_key_path.is_file()
+
+    run_inference(
+        InferenceConfig(
+            onnx_path=preprocessing_model_path,
+            key_path=None,
+            input_path=[plaintext_input_path],
+            output_path=[intermediate_plaintext_path],
+        )
+    )
+    assert intermediate_plaintext_path.is_file()
+
+    run_encrypt(
+        EncryptConfig(
+            key_path=secret_key_path,
+            plaintext_input_path=intermediate_plaintext_path,
+            ciphertext_output_path=intermediate_ciphertext_path,
+        )
+    )
+    assert intermediate_ciphertext_path.is_file()
+
+    run_inference(
+        InferenceConfig(
+            onnx_path=calibrated_core_model_path,
+            key_path=evaluation_key_path,
+            input_path=[intermediate_ciphertext_path],
+            output_path=[ciphertext_output_path],
+        )
+    )
+    assert ciphertext_output_path.is_file()
+
+    run_decrypt(
+        DecryptConfig(
+            key_path=secret_key_path,
+            ciphertext_input_path=ciphertext_output_path,
+            plaintext_output_path=plaintext_output_path,
+        )
+    )
+    assert plaintext_output_path.is_file()
+    output = np.load(plaintext_output_path)
+
+    assert np.allclose(output, test_output, rtol=1e-5, atol=1e-8)

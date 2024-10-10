@@ -9,13 +9,14 @@ from pydantic_settings import BaseSettings
 
 from he_man_tenseal import config, crypto
 from he_man_tenseal.inference import ONNXModel
+from he_man_tenseal.util import load_calibration_data
 
 
 def config_args(cfg_class: BaseSettings) -> Callable:
     def annotator(function: Callable) -> Callable:
         for key in cfg_class.model_fields:
-            if hasattr(cfg_class, "_%s" % key):
-                function = getattr(cfg_class, "_%s" % key)(function)
+            if hasattr(cfg_class, f"_{key}"):
+                function = getattr(cfg_class, f"_{key}")(function)
         return function
 
     return annotator
@@ -96,9 +97,20 @@ def decrypt(**kwargs: Any) -> None:
 
 def run_keyparams(cfg: config.KeyParamsConfig) -> None:
     model = ONNXModel(cfg.onnx_path, cfg)
+    calibration_data = load_calibration_data(cfg.calibration_data_path)
+
+    if cfg.split > 0:
+        model_preprocessing, model = model.split_preprocessing(cfg.split)
+        calibration_data = model_preprocessing(*calibration_data)
+        model_preprocessing.save(cfg.onnx_path, suffix="preprocessing")
+        model_suffix = "core_calibrated"
+    else:
+        model_suffix = "calibrated"
+
+    model.calibrate(calibration_data)
     key_params = crypto.find_optimal_parameters(cfg, model)
     key_params.save(cfg.key_params_path)
-    model.save_calibrated_model()
+    model.save(cfg.onnx_path, suffix=model_suffix)
 
 
 def run_keygen(cfg: config.KeyGenConfig) -> None:
@@ -116,10 +128,20 @@ def run_encrypt(cfg: config.EncryptConfig) -> None:
 
 def run_inference(cfg: config.InferenceConfig) -> None:
     model = ONNXModel(cfg.onnx_path)
-    context = crypto.load_context(cfg.key_path)
-    input = crypto.load_vector(context, cfg.ciphertext_input_path)
-    output = model(input)[0]
-    crypto.save_vector(output, cfg.ciphertext_output_path)
+    context = crypto.load_context(cfg.key_path) if cfg.key_path else None
+
+    inputs = [
+        crypto.load_plaintext_or_ciphertext_vector(context, input_path)
+        for input_path in cfg.input_path
+    ]
+
+    outputs = model(*inputs)
+
+    for output, output_path in zip(outputs, cfg.output_path):
+        if isinstance(output, np.ndarray):
+            np.save(output_path, output)
+        else:
+            crypto.save_vector(output, output_path)
 
 
 def run_decrypt(cfg: config.DecryptConfig) -> None:
