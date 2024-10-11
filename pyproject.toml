@@ -1,31 +1,43 @@
-[tool.poetry]
+[project]
 name = "he-man-tenseal"
 version = "0.1.0"
 description = "he-man-tenseal"
-authors = ["David Drexel, Alessio Montuoro, Martin Nocker, Michael Rader"]
-license = "Apache-2.0"
+authors = [
+    { name = "David Drexel" },
+    { name = "Alessio Montuoro" },
+    { name = "Martin Nocker" },
+    { name = "Michael Rader" }
+]
+dependencies = [
+    "tenseal>=0.3.15",
+    "click>=8.1.7",
+    "onnx>=1.17.0",
+    "onnxruntime>=1.19.2",
+    "loguru>=0.7.2",
+    "pydantic-settings>=2.5.2",
+    "jsonschema>=4.23.0",
+]
 readme = "README.md"
+requires-python = ">= 3.10"
 
-[tool.poetry.dependencies]
-python = "~3.10"
-tenseal = "^0.3.14"
-click = "^8.1.7"
-onnx = "^1.16.0"
-loguru = "^0.7.2"
-pydantic-settings = "^2.2.1"
-onnxruntime = "^1.17.3"
-jsonschema = "^4.21.1"
-
-
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^3.7.0"
-pytest-cov = "^5.0.0"
-torchvision = "^0.17.2"
-ipython = "^8.23.0"
+[project.scripts]
+he-man-tenseal ="he_man_tenseal.main:command_line"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry.scripts]
-he-man-tenseal ="he_man_tenseal.main:command_line"
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "pre-commit>=4.0.1",
+    "torchvision>=0.19.1",
+    "ipython>=8.28.0",
+    "pytest-cov>=5.0.0",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/he_man_tenseal"]

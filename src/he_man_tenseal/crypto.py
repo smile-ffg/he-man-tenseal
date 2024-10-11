@@ -219,4 +219,6 @@ def load_plaintext_or_ciphertext_vector(
     try:
         return np.load(path)
     except ValueError:
+        if context is None:
+            raise ValueError("Cannot load ciphertext vector without a key/context.")
         return load_vector(context, path)
